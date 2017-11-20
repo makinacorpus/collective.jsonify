@@ -1,13 +1,23 @@
+import datetime
+import os
+
 from Acquisition import aq_base
 from DateTime import DateTime
 from Products.CMFCore.utils import getToolByName
-import datetime
-import os
+
 try:
     from plone.uuid.interfaces import IUUID
+
     HASPLONEUUID = True
 except ImportError:
     HASPLONEUUID = False
+
+try:
+    from plone.app.redirector.interfaces import IRedirectionStorage
+
+    HAVE_REDIRECTOR = True
+except ImportError:
+    HAVE_REDIRECTOR = False
 
 
 class Wrapper(dict):
@@ -839,30 +849,38 @@ class Wrapper(dict):
         else:
             self['_zopeobject_document_src'] = ''
 
-
     def get_history(self):
         """ Export the history - metadata
         """
         try:
             repo_tool = getToolByName(self.context, "portal_repository")
             history_metadata = repo_tool.getHistoryMetadata(self.context)
-            if not(hasattr(history_metadata,'getLength')):
+            if not (hasattr(history_metadata, 'getLength')):
                 # No history metadata
                 return
 
             history_list = []
             # Count backwards from most recent to least recent
-            for i in xrange(history_metadata.getLength(countPurged=False)-1, -1, -1):
+            for i in xrange(history_metadata.getLength(countPurged=False) - 1, -1, -1):
                 data = history_metadata.retrieve(i, countPurged=False)
                 meta = data["metadata"]["sys_metadata"].copy()
                 version_id = history_metadata.getVersionId(i, countPurged=False)
                 try:
-                    dateaux = datetime.datetime.fromtimestamp(meta.get('timestamp',0))
+                    dateaux = datetime.datetime.fromtimestamp(meta.get('timestamp', 0))
                     meta['timestamp'] = dateaux.strftime("%Y/%m/%d %H:%M:%S GMT")
                 except Exception, ex:
-                    meta['timestamp']=''
+                    meta['timestamp'] = ''
                 history_list.append(meta)
             self['_history'] = history_list
 
         except:
             pass
+
+    if HAVE_REDIRECTOR:
+
+        def get_redirections(self):
+            from zope.component import getUtility
+            storage = getUtility(IRedirectionStorage)
+            context_path = "/".join(self.context.getPhysicalPath())
+            redirects = storage.redirects(context_path)
+            self['_redirections'] = redirects
